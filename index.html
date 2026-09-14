@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<title>숫자야구 v1.2</title>
+<title>숫자야구 v1.21</title>
 
 <style>
 *{
@@ -28,7 +28,7 @@ body{
 /* 루미큐브 방에서는 게임판을 가로로 충분히 사용할 수 있도록 전체 레이아웃 확장 */
 .app.rummi-app-wide{width:100vw;max-width:none;margin:0;padding-left:14px;padding-right:14px;}
 .app.rummi-app-wide #roomView > .card{width:100%;max-width:none;padding:14px 16px}
-/* v1.2: 숫자야구 입력 커서 유지 및 화면 갱신 개선 */
+/* v1.21: 숫자야구 입력 커서 유지 및 화면 갱신 개선 */
 .app.rummi-app-wide #roomView .grid.rummi-wide-layout{display:grid !important;grid-template-columns:minmax(0,1fr) 300px !important;gap:14px;width:100%;}
 .app.rummi-app-wide #roomView .grid.rummi-wide-layout > aside:first-child{display:none}
 .app.rummi-app-wide #roomView .grid.rummi-wide-layout > main{min-width:0;width:100%;max-width:none}
@@ -542,7 +542,7 @@ input,select,textarea{
  <div>
   <h1>⚾ 숫자야구</h1>
   <div class="tag">
-   숫자야구 · 컴퓨터 대전 · 1:1 대전 · v1.2
+   숫자야구 · 컴퓨터 대전 · 1:1 대전 · v1.21
   </div>
  </div>
  <div id="who" class="tag"></div>
@@ -2971,7 +2971,7 @@ async function setRummikubTurnLimit(sec){const r=data.partyRooms[roomId];if(!r||
 
 
 
-/* ==================== 숫자야구 전용 오버라이드 v1.2 ==================== */
+/* ==================== 숫자야구 전용 오버라이드 v1.21 ==================== */
 function icon(type){
  if(type==='baseball') return '⚾';
  if(type==='davinci') return '🧩';
@@ -3079,12 +3079,16 @@ function drawBaseball(r){
 async function baseballSetSecret(){
  const r=data.partyRooms[roomId],g=r?.game;if(!g||g.phase!=='setting')return;if(g.ready?.[me.id])return;const input=$('baseballSecretInput');const secret=(input?.value||'').trim();if(!baseballValidSecret(secret))return alert('서로 다른 숫자 4개를 입력해주세요. 예: 5072');g.secrets[me.id]=secret;g.ready[me.id]=true;
  if(g.ids.every(id=>g.ready[id])){g.phase='guessing';g.turn=0;g.lastAction=g.aiMode?'🎮 게임 시작! AI보다 먼저 상대 숫자를 맞혀보세요.':'🎮 양쪽 숫자가 모두 설정되었습니다. 게임을 시작합니다!';}else g.lastAction=`${name(me.id)}님이 숫자를 설정했습니다. 상대방의 준비를 기다리는 중입니다.`;
- await put(ROOM+'/'+roomId,r);await get();render();
+ await put(ROOM+'/'+roomId,r);
+ if(input) input.blur();
+ await get();render();
 }
 async function baseballGuess(){
  const r=data.partyRooms[roomId],g=r?.game;if(!g||g.phase!=='guessing'||g.finished)return;if(baseballCurrentPlayer(g)!==me.id)return alert('지금은 상대방의 차례입니다.');const input=$('baseballGuessInput');const guess=(input?.value||'').trim();if(!baseballValidSecret(guess))return alert('서로 다른 숫자 4개를 입력해주세요.');const opponent=g.ids.find(id=>id!==me.id);const score=baseballScore(g.secrets[opponent],guess);g.history[me.id]=g.history[me.id]||[];g.history[me.id].push({guess,s:score.s,b:score.b,at:Date.now()});
  if(score.s===4){g.finished=true;g.phase='ended';g.winner=me.id;g.lastAction=`🎉 ${name(me.id)}님이 ${g.aiMode?'AI의':'상대방의'} 숫자를 맞혔습니다! 정답: ${guess}`;}else{g.turn=(g.turn+1)%g.ids.length;g.lastAction=`${name(me.id)}님의 추리: ${guess} → ${score.s}S ${score.b}B`;}
- await put(ROOM+'/'+roomId,r);await get();render();
+ await put(ROOM+'/'+roomId,r);
+ input.blur();
+ await get();render();
  if(g.aiMode && !g.finished && baseballCurrentPlayer(g)==='AI_BASEBALL') setTimeout(processBaseballAiTurn,700);
 }
 async function processBaseballAiTurn(){
@@ -3099,27 +3103,46 @@ async function startBaseballAiGame(difficulty='normal'){
 async function startGame(){
  const r=data.partyRooms[roomId];if(!r)return;if(r.host!==me.id&&!isAdmin())return alert('방장만 게임을 시작할 수 있습니다.');const ids=Object.keys(r.players||{});if(ids.length<2)return alert('숫자야구 대전은 2명이 필요합니다.');if(ids.length>2)return alert('숫자야구는 최대 2명까지 참가할 수 있습니다.');if(r.type!=='baseball')r.type='baseball';r.game=createBaseball(ids);r.status='playing';r.startedAt=Date.now();r.chat=r.chat||[];r.chat.push({id:'system',text:'⚾ 숫자야구 게임이 시작되었습니다! 각자 숫자 4개를 설정해주세요.'});const ok=await put(ROOM+'/'+roomId,r);if(!ok)return alert('게임 시작에 실패했습니다.');await get();render();}
 function renderRoom(r){
- show('roomView');const outerGrid=document.querySelector('#roomView .grid');if(outerGrid)outerGrid.classList.remove('rummi-wide-layout');const appRoot=document.querySelector('.app');if(appRoot)appRoot.classList.remove('rummi-app-wide');$('roomTitle').innerHTML=`<b>🎮 ${esc(r.title)}</b>`;$('players').innerHTML=Object.keys(r.players||{}).map(id=>`<span class="player">${id===r.host?'👑 ':''}${id===ADMIN_ID?'관리자':esc(name(id))}</span>`).join('');$('roomInfo').textContent=Object.keys(r.players||{}).length+'/'+limit('baseball')+'명 · '+(r.status==='waiting'?'게임 시작 전':'게임 진행 중');const canControl=r.host===me.id||isAdmin();$('hostControls').innerHTML=(canControl&&r.status==='waiting')?`<button class="gold" onclick="startGame()">▶ 게임 시작</button>`:'';$('chat').innerHTML=(r.chat||[]).slice(-50).map(m=>`<p class="${m.id===me.id?'mine':''}"><b>${m.id==='system'?'📢':esc(name(m.id))}</b> ${esc(m.text)}</p>`).join('');$('chat').scrollTop=$('chat').scrollHeight;if(r.status==='playing')$('gameArea').innerHTML=r.game?drawBaseball(r):'<div class="notice">게임 데이터를 불러오는 중입니다...</div>';else if(r.status==='waiting')drawWaitingRoom(r);else if(r.status==='ended')$('gameArea').innerHTML=drawEnded(r);
- if(r.status==='playing'&&r.game?.aiMode&&r.game.phase==='guessing'&&!r.game.finished&&baseballCurrentPlayer(r.game)==='AI_BASEBALL'&&!r.game.aiBusy)setTimeout(processBaseballAiTurn,500);
+ // 숫자야구 입력창은 2초 주기 Firebase 갱신 때문에 DOM을 다시 만들지 않는다.
+ // 입력 중에는 gameArea를 그대로 유지해야 숫자/커서가 절대 사라지지 않는다.
+ const activeEl=document.activeElement;
+ const preserveBaseballInput=!!(activeEl && (activeEl.id==='baseballSecretInput'||activeEl.id==='baseballGuessInput'));
+ show('roomView');
+ const outerGrid=document.querySelector('#roomView .grid');
+ if(outerGrid)outerGrid.classList.remove('rummi-wide-layout');
+ const appRoot=document.querySelector('.app');
+ if(appRoot)appRoot.classList.remove('rummi-app-wide');
+ $('roomTitle').innerHTML=`<b>🎮 ${esc(r.title)}</b>`;
+ $('players').innerHTML=Object.keys(r.players||{}).map(id=>`<span class="player">${id===r.host?'👑 ':''}${id===ADMIN_ID?'관리자':esc(name(id))}</span>`).join('');
+ $('roomInfo').textContent=Object.keys(r.players||{}).length+'/'+limit('baseball')+'명 · '+(r.status==='waiting'?'게임 시작 전':'게임 진행 중');
+ const canControl=r.host===me.id||isAdmin();
+ $('hostControls').innerHTML=(canControl&&r.status==='waiting')?`<button class="gold" onclick="startGame()">▶ 게임 시작</button>`:'';
+ $('chat').innerHTML=(r.chat||[]).slice(-50).map(m=>`<p class="${m.id===me.id?'mine':''}"><b>${m.id==='system'?'📢':esc(name(m.id))}</b> ${esc(m.text)}</p>`).join('');
+ $('chat').scrollTop=$('chat').scrollHeight;
 
- // 화면 재생성 후 입력창을 다시 찾아 값과 커서를 복원한다.
- if(typingId){
-  const restored=$(typingId);
-  if(restored && !restored.disabled){
-   restored.value=typingValue;
-   try{
-    const posStart=typingStart===null?restored.value.length:Math.min(typingStart,restored.value.length);
-    const posEnd=typingEnd===null?posStart:Math.min(typingEnd,restored.value.length);
-    restored.focus({preventScroll:true});
-    restored.setSelectionRange(posStart,posEnd);
-   }catch(e){ restored.focus({preventScroll:true}); }
+ // 입력창에 커서가 있는 동안에는 게임 영역을 통째로 재생성하지 않는다.
+ // 이렇게 해야 2초마다 실행되는 render()가 input.value를 초기화하지 않는다.
+ if(r.status==='playing'){
+  if(r.game && !preserveBaseballInput){
+   $('gameArea').innerHTML=drawBaseball(r);
+  } else if(!r.game){
+   $('gameArea').innerHTML='<div class="notice">게임 데이터를 불러오는 중입니다...</div>';
   }
+ }else if(r.status==='waiting'){
+  drawWaitingRoom(r);
+ }else if(r.status==='ended'){
+  $('gameArea').innerHTML=drawEnded(r);
+ }
+
+ if(r.status==='playing'&&r.game?.aiMode&&r.game.phase==='guessing'&&!r.game.finished&&baseballCurrentPlayer(r.game)==='AI_BASEBALL'&&!r.game.aiBusy){
+  setTimeout(processBaseballAiTurn,500);
  }
 }
+
 function drawWaitingRoom(r){const canControl=r.host===me.id||isAdmin();const count=Object.keys(r.players||{}).length;let aiButtons='';if(canControl&&count===1)aiButtons=`<div class="baseball-ai-box"><b>🤖 컴퓨터와 대전</b><div class="small" style="margin:6px 0 10px">난이도를 선택하면 바로 AI 대전을 시작합니다.</div><div class="baseball-ai-buttons"><button class="gold" onclick="startBaseballAiGame('easy')">하</button><button class="gold" onclick="startBaseballAiGame('normal')">중</button><button class="gold" onclick="startBaseballAiGame('hard')">상</button></div></div>`; $('gameArea').innerHTML=`<div class="map-box"><div class="map-title">🗺️ 게임</div><h2 style="margin:5px 0 12px">⚾ 숫자야구</h2><div class="notice">이 방은 <b>숫자야구</b> 전용 방입니다.<br>2명이 입장하면 방장이 일반 대전을 시작할 수 있습니다.</div></div>${aiButtons}<div class="notice"><b>참가자 ${count}명 / 2명</b><br>서로 다른 숫자 4개를 맞히는 1:1 숫자야구입니다.</div>${canControl&&count>=2?`<button class="gold" style="width:100%;margin-top:10px" onclick="startGame()">▶ 숫자야구 게임 시작</button>`:''}`;}
 function name(id){return id===ADMIN_ID?'관리자':id;}
 
-/* 숫자야구 전용 스타일 v1.2 */
+/* 숫자야구 전용 스타일 v1.21 */
 
 </script>
 </body>
