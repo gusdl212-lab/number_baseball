@@ -3084,12 +3084,45 @@ async function baseballSetSecret(){
  await get();render();
 }
 async function baseballGuess(){
- const r=data.partyRooms[roomId],g=r?.game;if(!g||g.phase!=='guessing'||g.finished)return;if(baseballCurrentPlayer(g)!==me.id)return alert('지금은 상대방의 차례입니다.');const input=$('baseballGuessInput');const guess=(input?.value||'').trim();if(!baseballValidSecret(guess))return alert('서로 다른 숫자 4개를 입력해주세요.');const opponent=g.ids.find(id=>id!==me.id);const score=baseballScore(g.secrets[opponent],guess);g.history[me.id]=g.history[me.id]||[];g.history[me.id].push({guess,s:score.s,b:score.b,at:Date.now()});
- if(score.s===4){g.finished=true;g.phase='ended';g.winner=me.id;g.lastAction=`🎉 ${name(me.id)}님이 ${g.aiMode?'AI의':'상대방의'} 숫자를 맞혔습니다! 정답: ${guess}`;}else{g.turn=(g.turn+1)%g.ids.length;g.lastAction=`${name(me.id)}님의 추리: ${guess} → ${score.s}S ${score.b}B`;}
- await put(ROOM+'/'+roomId,r);
- input.blur();
- await get();render();
- if(g.aiMode && !g.finished && baseballCurrentPlayer(g)==='AI_BASEBALL') setTimeout(processBaseballAiTurn,700);
+ // 2초 주기 render() 때문에 로컬 게임 데이터가 오래된 상태일 수 있으므로
+ // 추리하기 직전에 Firebase의 최신 방 데이터를 다시 가져온다.
+ await get();
+ const r=data.partyRooms[roomId],g=r?.game;
+ if(!g||g.phase!=='guessing'||g.finished){
+  render();
+  return alert('현재 추리할 수 없는 상태입니다. 게임 상태를 확인해주세요.');
+ }
+ if(baseballCurrentPlayer(g)!==me.id)return alert('지금은 상대방의 차례입니다.');
+
+ const input=$('baseballGuessInput');
+ const guess=(input?.value||'').trim();
+ if(!baseballValidSecret(guess))return alert('서로 다른 숫자 4개를 입력해주세요. 예: 5072');
+
+ const opponent=g.ids.find(id=>id!==me.id);
+ if(!opponent || !g.secrets?.[opponent])return alert('상대방의 숫자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+
+ const score=baseballScore(g.secrets[opponent],guess);
+ g.history=g.history||{};
+ g.history[me.id]=g.history[me.id]||[];
+ g.history[me.id].push({guess,s:score.s,b:score.b,at:Date.now()});
+
+ if(score.s===4){
+  g.finished=true;
+  g.phase='ended';
+  g.winner=me.id;
+  g.lastAction=`🎉 ${name(me.id)}님이 ${g.aiMode?'AI의':'상대방의'} 숫자를 맞혔습니다! 정답: ${guess}`;
+ }else{
+  g.turn=(g.turn+1)%g.ids.length;
+  g.lastAction=`${name(me.id)}님의 추리: ${guess} → ${score.s}S ${score.b}B`;
+ }
+
+ const ok=await put(ROOM+'/'+roomId,r);
+ if(!ok)return alert('추리 결과 저장에 실패했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.');
+
+ if(input)input.blur();
+ await get();
+ render();
+ if(g.aiMode && !g.finished && baseballCurrentPlayer(g)==='AI_BASEBALL')setTimeout(processBaseballAiTurn,700);
 }
 async function processBaseballAiTurn(){
  const r=data.partyRooms[roomId],g=r?.game;if(!g||!g.aiMode||g.finished||g.phase!=='guessing'||baseballCurrentPlayer(g)!=='AI_BASEBALL'||g.aiBusy)return;
